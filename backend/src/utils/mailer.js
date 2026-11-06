@@ -1,0 +1,98 @@
+const nodemailer = require('nodemailer');
+
+const isProd = process.env.NODE_ENV === 'production';
+const smtpConfigured = Boolean(process.env.SMTP_HOST);
+
+if (isProd && !smtpConfigured) {
+  throw new Error('SMTP_HOST não definido: em produção o envio de e-mail é obrigatório');
+}
+
+const transporter = smtpConfigured
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: process.env.SMTP_USER
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        : undefined,
+    })
+  : null;
+
+const from = process.env.MAIL_FROM || 'Grimório <no-reply@localhost>';
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[c]);
+}
+
+async function enviarEmail({ to, subject, html, text }) {
+  if (!transporter) {
+    // Desenvolvimento sem SMTP: mostra o e-mail no terminal
+    console.log(`\n[e-mail simulado]\nPara: ${to}\nAssunto: ${subject}\n\n${text}\n`);
+    return;
+  }
+  await transporter.sendMail({ from, to, subject, html, text });
+}
+
+function emailConfirmacao({ name, link, horas }) {
+  const nome = escapeHtml(name);
+  const url = escapeHtml(link);
+
+  const subject = 'Confirme seu e-mail no Grimório';
+
+  const text = [
+    `Olá, ${name}!`,
+    '',
+    'Para ativar sua conta no Grimório, confirme que este e-mail é seu abrindo o link abaixo:',
+    link,
+    '',
+    `O link vale por ${horas} horas. Se a conta não for confirmada nesse prazo, ela será excluída automaticamente.`,
+    '',
+    'Se você não criou uma conta no Grimório, ignore este e-mail.',
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+  <body style="margin:0;padding:0;background:#14101f;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#14101f;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#1f1830;border:1px solid #3a2f57;border-radius:12px;">
+            <tr>
+              <td style="padding:32px;font-family:Georgia,'Times New Roman',serif;color:#ece6f7;">
+                <div style="font-size:26px;color:#c9a24b;margin-bottom:24px;">Grimório</div>
+                <h1 style="font-size:20px;font-weight:normal;margin:0 0 16px;">Olá, ${nome}! Confirme seu e-mail</h1>
+                <p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#cfc6e3;margin:0 0 24px;">
+                  Para ativar sua conta no Grimório, confirme que este endereço de e-mail é seu.
+                </p>
+                <a href="${url}" style="display:inline-block;background:#c9a24b;color:#1a1408;font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:8px;">
+                  Confirmar e-mail
+                </a>
+                <p style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#9a8fb5;margin:24px 0 0;">
+                  Se o botão não funcionar, copie e cole este endereço no navegador:<br>
+                  <a href="${url}" style="color:#c9a24b;word-break:break-all;">${url}</a>
+                </p>
+                <p style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#9a8fb5;margin:16px 0 0;">
+                  O link vale por ${horas} horas. Se a conta não for confirmada nesse prazo, ela será excluída automaticamente.
+                </p>
+                <p style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#9a8fb5;margin:16px 0 0;">
+                  Se você não criou uma conta no Grimório, ignore este e-mail.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+module.exports = { enviarEmail, emailConfirmacao };

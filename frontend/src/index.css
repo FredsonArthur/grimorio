@@ -156,3 +156,6 @@ select {
   border-radius: 8px;
   background: var(--bg);
 }
+
+/* Botão dentro de formulários (reenvio de e-mail) */
+.form button.ghost { margin-left: 0; }

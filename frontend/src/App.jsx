@@ -3,6 +3,7 @@ import { AuthProvider } from './AuthContext';
 import ProtectedRoute from './ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
 import NewRoom from './pages/NewRoom';
 import Room from './pages/Room';
@@ -15,6 +16,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Register />} />
+          <Route path="/verificar-email" element={<VerifyEmail />} />
           <Route path="/entrar/:code" element={<Join />} />
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/salas/nova" element={<ProtectedRoute><NewRoom /></ProtectedRoute>} />

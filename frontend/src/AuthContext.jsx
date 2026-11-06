@@ -19,9 +19,9 @@ export function AuthProvider({ children }) {
     setUser(data.user);
   }
 
+  // O cadastro não loga: a pessoa precisa confirmar o e-mail antes de entrar
   async function register(name, email, password) {
-    const data = await api('/auth/register', { method: 'POST', body: { name, email, password } });
-    setUser(data.user);
+    return api('/auth/register', { method: 'POST', body: { name, email, password } });
   }
 
   async function logout() {

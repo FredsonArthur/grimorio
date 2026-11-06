@@ -14,6 +14,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   if (!res.ok) {
     const error = new Error(data.error || 'Erro inesperado');
     error.status = res.status;
+    error.code = data.code;
     error.details = data.details;
     throw error;
   }

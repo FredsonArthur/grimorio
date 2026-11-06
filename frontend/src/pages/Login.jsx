@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import ResendVerification from '../components/ResendVerification';
 
 export default function Login() {
   const { user, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notVerified, setNotVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (user) return <Navigate to="/" replace />;
@@ -14,11 +16,13 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setNotVerified(false);
     setSubmitting(true);
     try {
       await login(email, password);
     } catch (err) {
       setError(err.details?.[0]?.mensagem || err.message);
+      setNotVerified(err.code === 'EMAIL_NOT_VERIFIED');
     } finally {
       setSubmitting(false);
     }
@@ -30,6 +34,7 @@ export default function Login() {
         <h1>Grimório</h1>
         <p className="subtitle">Entre para continuar sua aventura</p>
         {error && <p className="error">{error}</p>}
+        {notVerified && <ResendVerification email={email} />}
         <label>
           E-mail
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
