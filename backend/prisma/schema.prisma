@@ -6,13 +6,53 @@ datasource db {
   provider = "postgresql"
 }
 
+enum RoomRole {
+  MASTER
+  PLAYER
+}
+
 model User {
-  id           String   @id @default(uuid())
+  id           String       @id @default(uuid())
   name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  ownedRooms   Room[]       @relation("RoomOwner")
+  memberships  RoomMember[]
 
   @@map("users")
+}
+
+model Room {
+  id            String       @id @default(uuid())
+  name          String
+  description   String       @default("")
+  system        String       @default("dnd5e")
+  campaignType  String       @default("campaign") @map("campaign_type")
+  maxPlayers    Int          @default(6) @map("max_players")
+  startingLevel Int          @default(1) @map("starting_level")
+  schedule      String       @default("")
+  coverUrl      String       @default("") @map("cover_url")
+  inviteCode    String       @unique @map("invite_code")
+  ownerId       String       @map("owner_id")
+  owner         User         @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       RoomMember[]
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id       String   @id @default(uuid())
+  roomId   String   @map("room_id")
+  userId   String   @map("user_id")
+  role     RoomRole @default(PLAYER)
+  joinedAt DateTime @default(now()) @map("joined_at")
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@map("room_members")
 }

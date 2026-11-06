@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const authRoutes = require('./routes/auth');
+const roomRoutes = require('./routes/rooms');
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET não definido no .env');
@@ -16,6 +17,7 @@ app.use(cookieParser());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.use('/auth', authRoutes);
+app.use('/rooms', roomRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

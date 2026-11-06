@@ -4,6 +4,9 @@ import ProtectedRoute from './ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
+import NewRoom from './pages/NewRoom';
+import Room from './pages/Room';
+import Join from './pages/Join';
 
 export default function App() {
   return (
@@ -12,14 +15,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Register />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/entrar/:code" element={<Join />} />
+          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/salas/nova" element={<ProtectedRoute><NewRoom /></ProtectedRoute>} />
+          <Route path="/salas/:id" element={<ProtectedRoute><Room /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
