@@ -1,10 +1,11 @@
 const nodemailer = require('nodemailer');
 
 const isProd = process.env.NODE_ENV === 'production';
+const resendKey = process.env.RESEND_API_KEY;
 const smtpConfigured = Boolean(process.env.SMTP_HOST);
 
-if (isProd && !smtpConfigured) {
-  throw new Error('SMTP_HOST não definido: em produção o envio de e-mail é obrigatório');
+if (isProd && !resendKey && !smtpConfigured) {
+  throw new Error('Defina RESEND_API_KEY ou SMTP_HOST: em produção o envio de e-mail é obrigatório');
 }
 
 const transporter = smtpConfigured
@@ -20,6 +21,10 @@ const transporter = smtpConfigured
 
 const from = process.env.MAIL_FROM || 'Grimório <no-reply@localhost>';
 
+if (!resendKey && !smtpConfigured) {
+  console.warn('Aviso: e-mail não configurado. Os e-mails serão apenas exibidos neste terminal, não enviados.');
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;',
@@ -30,13 +35,34 @@ function escapeHtml(value) {
   })[c]);
 }
 
+// Envio pela API HTTPS do Resend (funciona em hospedagens que bloqueiam portas SMTP)
+async function enviarPorResend({ to, subject, html, text }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: [to], subject, html, text }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const detalhe = await res.text().catch(() => '');
+    throw new Error(`Resend respondeu ${res.status}: ${detalhe}`);
+  }
+}
+
 async function enviarEmail({ to, subject, html, text }) {
-  if (!transporter) {
-    // Desenvolvimento sem SMTP: mostra o e-mail no terminal
-    console.log(`\n[e-mail simulado]\nPara: ${to}\nAssunto: ${subject}\n\n${text}\n`);
+  if (resendKey) return enviarPorResend({ to, subject, html, text });
+
+  if (transporter) {
+    await transporter.sendMail({ from, to, subject, html, text });
     return;
   }
-  await transporter.sendMail({ from, to, subject, html, text });
+
+  // Desenvolvimento sem provedor: mostra o e-mail no terminal
+  console.log(`\n[e-mail simulado]\nPara: ${to}\nAssunto: ${subject}\n\n${text}\n`);
 }
 
 function emailConfirmacao({ name, link, horas }) {

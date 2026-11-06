@@ -1,0 +1,8 @@
+{
+  "name": "grimorio",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install --include=dev && npm --prefix backend run build",
+    "start": "npm --prefix backend run start:prod"
+  }
+}

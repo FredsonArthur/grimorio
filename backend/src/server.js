@@ -1,4 +1,6 @@
 require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -40,6 +42,16 @@ app.use('/auth/login', limiteAuth);
 app.use('/auth/resend-verification', limiteAuth);
 app.use('/auth', authRoutes);
 app.use('/rooms', roomRoutes);
+
+// Em produção o backend também serve o frontend compilado (mesma origem, sem CORS)
+const distPath = path.join(__dirname, '..', '..', 'frontend', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 app.use((err, req, res, next) => {
   console.error(err);

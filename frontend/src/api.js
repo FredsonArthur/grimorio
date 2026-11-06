@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+// Em desenvolvimento, a API roda em localhost:3000. Em produção, o backend serve o site,
+// então as chamadas usam o mesmo endereço (URL relativa).
+const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
