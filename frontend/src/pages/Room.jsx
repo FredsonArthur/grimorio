@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import RoomForm from '../components/RoomForm';
+import CharacterList from '../components/CharacterList';
 import { SYSTEMS, CAMPAIGN_TYPES } from '../roomOptions';
 
 export default function Room() {
@@ -172,6 +173,8 @@ export default function Room() {
             </div>
           </section>
         )}
+
+        <CharacterList roomId={id} isMaster={isMaster} />
 
         <section className="card">
           <h3>Membros ({room.members.length})</h3>

@@ -159,3 +159,74 @@ select {
 
 /* Botão dentro de formulários (reenvio de e-mail) */
 .form button.ghost { margin-left: 0; }
+
+
+/* Fichas */
+.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--text); }
+.check input { width: auto; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.5rem 1rem; }
+
+.abilities-edit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+@media (max-width: 600px) {
+  .abilities-edit { grid-template-columns: repeat(2, 1fr); }
+}
+
+.attack-row { display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 0.5rem; }
+@media (max-width: 600px) {
+  .attack-row { grid-template-columns: 1fr; }
+}
+
+.group-title { margin: 1rem 0 0.25rem; font-family: Georgia, serif; color: var(--muted); }
+.sheet-list { display: grid; gap: 0.5rem; }
+.sheet-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.sheet-item:hover { border-color: var(--accent); }
+
+.sheet-header { display: flex; align-items: center; gap: 1rem; }
+.portrait { width: 84px; height: 84px; object-fit: cover; border-radius: 50%; border: 1px solid var(--border); }
+
+.stat-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.stat strong { font-size: 1.4rem; font-family: Georgia, serif; }
+
+.abilities { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+.ability {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ability strong { font-size: 1.6rem; font-family: Georgia, serif; }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+.two-col .card + .card { margin-top: 0; }
+@media (max-width: 700px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+.proficiencies { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.proficiencies li { display: flex; justify-content: space-between; gap: 0.75rem; }
+
+.prewrap { white-space: pre-wrap; margin: 0; }

@@ -11,6 +11,11 @@ enum RoomRole {
   PLAYER
 }
 
+enum CharacterType {
+  PLAYER
+  NPC
+}
+
 model User {
   id                    String       @id @default(uuid())
   name                  String
@@ -23,6 +28,7 @@ model User {
   updatedAt             DateTime     @updatedAt @map("updated_at")
   ownedRooms            Room[]       @relation("RoomOwner")
   memberships           RoomMember[]
+  characters            Character[]  @relation("CharacterPlayer")
 
   @@map("users")
 }
@@ -41,6 +47,7 @@ model Room {
   ownerId       String       @map("owner_id")
   owner         User         @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members       RoomMember[]
+  characters    Character[]
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -58,4 +65,22 @@ model RoomMember {
 
   @@unique([roomId, userId])
   @@map("room_members")
+}
+
+model Character {
+  id               String        @id @default(uuid())
+  roomId           String        @map("room_id")
+  type             CharacterType
+  name             String
+  imageUrl         String        @default("") @map("image_url")
+  playerId         String?       @map("player_id")
+  visibleToPlayers Boolean       @default(false) @map("visible_to_players")
+  data             Json
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  room             Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  player           User?         @relation("CharacterPlayer", fields: [playerId], references: [id], onDelete: SetNull)
+
+  @@index([roomId])
+  @@map("characters")
 }

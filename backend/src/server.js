@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/auth');
 const roomRoutes = require('./routes/rooms');
+const characterRoutes = require('./routes/characters');
 const { iniciarLimpezaDeContas } = require('./jobs/limparContasNaoConfirmadas');
 
 if (!process.env.JWT_SECRET) {
@@ -41,6 +42,7 @@ app.use('/auth/register', limiteAuth);
 app.use('/auth/login', limiteAuth);
 app.use('/auth/resend-verification', limiteAuth);
 app.use('/auth', authRoutes);
+app.use('/rooms/:roomId/characters', characterRoutes);
 app.use('/rooms', roomRoutes);
 
 // Em produção o backend também serve o frontend compilado (mesma origem, sem CORS)
