@@ -51,7 +51,17 @@ export default function Home() {
 
         <div className="room-list">
           {rooms.map((room) => (
-            <Link key={room.id} to={`/salas/${room.id}`} className="card room-card">
+            <article
+              key={room.id}
+              className="card room-card"
+              role="link"
+              tabIndex={0}
+              title="Ver as configurações da sala"
+              onClick={() => navigate(`/salas/${room.id}`)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && e.key === 'Enter') navigate(`/salas/${room.id}`);
+              }}
+            >
               {room.coverUrl && (
                 <img
                   key={room.coverUrl}
@@ -73,7 +83,16 @@ export default function Home() {
                 {room.playerCount}/{room.maxPlayers} jogadores
               </small>
               <small className="muted">Mestre: {room.ownerName}</small>
-            </Link>
+              <div className="actions">
+                <Link
+                  className="btn"
+                  to={`/salas/${room.id}/mesa`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Abrir sala
+                </Link>
+              </div>
+            </article>
           ))}
         </div>
       </main>

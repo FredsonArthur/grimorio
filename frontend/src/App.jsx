@@ -7,8 +7,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
 import NewRoom from './pages/NewRoom';
 import Room from './pages/Room';
-import NewCharacter from './pages/NewCharacter';
-import Character from './pages/Character';
+import Mesa from './pages/Mesa';
 import Join from './pages/Join';
 
 export default function App() {
@@ -23,8 +22,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/salas/nova" element={<ProtectedRoute><NewRoom /></ProtectedRoute>} />
           <Route path="/salas/:id" element={<ProtectedRoute><Room /></ProtectedRoute>} />
-          <Route path="/salas/:id/fichas/nova" element={<ProtectedRoute><NewCharacter /></ProtectedRoute>} />
-          <Route path="/salas/:id/fichas/:characterId" element={<ProtectedRoute><Character /></ProtectedRoute>} />
+          <Route path="/salas/:id/mesa" element={<ProtectedRoute><Mesa /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

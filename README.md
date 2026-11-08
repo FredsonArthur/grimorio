@@ -1,6 +1,6 @@
 # Grimório
 
-Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edição. O mestre cria uma sala, convida os jogadores por um link e monta as fichas de personagens e NPCs. Nas próximas etapas, a mesa ganha mapa, tokens, rolagem de dados e chat em tempo real.
+Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edição. O mestre cria uma sala, convida os jogadores por um link, monta as fichas de personagens e NPCs e conduz a sessão em uma mesa com mapa e chat em tempo real.
 
 > "D&D" e "Dungeons & Dragons" são marcas registradas da Wizards of the Coast. Este é um projeto independente, sem afiliação.
 
@@ -9,8 +9,16 @@ Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edi�
 - Cadastro com **confirmação de e-mail** (contas não confirmadas em 24 horas são excluídas de vez)
 - Login com sessão em cookie `httpOnly`
 - **Salas de RPG**: criar, listar, editar e apagar, com capa, sistema de regras, tipo de jogo, nível inicial, limite de jogadores e agenda
+  - Clicar no cartão da sala abre as **configurações** (dados da sala, convite e membros)
+  - O botão **Abrir sala** leva à mesa de jogo
 - **Convite por link**: copiar, compartilhar (WhatsApp, Telegram, e-mail) e gerar um novo link quando quiser
 - Papéis de **mestre** e **jogador**, com permissões diferentes
+- **A mesa de jogo**:
+  - Mapa quadriculado em branco no centro (preparado para receber imagens de mapa)
+  - Barra lateral esquerda com as ferramentas de RPG (em breve)
+  - Barra lateral direita com abas:
+    - **Chat em tempo real**, com histórico salvo (as últimas 100 mensagens aparecem ao abrir a mesa)
+    - **Fichas**, com criação e edição sem sair da mesa: as fichas abrem em um painel lateral sobre o mapa
 - **Fichas de D&D 5e**, criadas pelo mestre, em dois formatos:
   - **Personagem de jogador**: identidade, nível, atributos, vida, CA, salvaguardas e perícias, ataques, equipamento, magias e anotações, com modificadores, bônus de proficiência e totais calculados. O jogador responsável vê e edita a própria ficha
   - **NPC**: formato de criatura, com tipo, tamanho, ND, atributos, ações e **anotações secretas** do mestre. Fica oculto por padrão, e o mestre pode revelá-lo aos jogadores (sem as anotações secretas)
@@ -19,6 +27,7 @@ Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edi�
 
 - **Frontend:** React, Vite e React Router
 - **Backend:** Node.js, Express e Zod
+- **Tempo real:** Socket.IO (WebSocket)
 - **Banco de dados:** PostgreSQL com Prisma 7
 - **Autenticação:** bcrypt e JWT em cookie `httpOnly`
 - **E-mail:** Resend (API) ou SMTP, com Nodemailer
@@ -32,14 +41,16 @@ grimorio/
 │   └── src/
 │       ├── jobs/        # limpeza de contas não confirmadas
 │       ├── middleware/  # autenticação
-│       ├── routes/      # auth, rooms e characters
+│       ├── routes/      # auth, rooms, characters e messages
 │       ├── scripts/     # teste de envio de e-mail
-│       └── utils/       # e-mail e validação
+│       ├── utils/       # e-mail e validação
+│       └── realtime.js  # servidor Socket.IO (chat)
 ├── frontend/
 │   └── src/
-│       ├── components/  # formulários e listas reutilizáveis
+│       ├── components/  # mapa, chat, fichas, painel lateral e formulários
 │       ├── pages/       # telas
-│       └── dnd.js       # tabelas e fórmulas de D&D 5e
+│       ├── dnd.js       # tabelas e fórmulas de D&D 5e
+│       └── socket.js    # conexão em tempo real
 └── package.json         # scripts de build e start para o deploy
 ```
 
@@ -87,7 +98,7 @@ npx prisma generate
 npm run dev
 ```
 
-A API sobe em `http://localhost:3000`. Sem nenhuma configuração de e-mail, o link de confirmação aparece no terminal do backend.
+A API e o servidor de tempo real sobem juntos em `http://localhost:3000`. Sem nenhuma configuração de e-mail, o link de confirmação aparece no terminal do backend.
 
 ### 3. Frontend
 
@@ -97,7 +108,7 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:5173`.
+Abra `http://localhost:5173`. O chat precisa dos dois servidores rodando.
 
 ## E-mail
 
@@ -113,6 +124,18 @@ Para testar o envio sem fazer um cadastro:
 cd backend
 node src/scripts/testar-email.js destino@exemplo.com
 ```
+
+## Telas
+
+| Rota | Descrição |
+| --- | --- |
+| `/login`, `/cadastro` | Entrar e criar conta |
+| `/verificar-email` | Confirmação do e-mail, pelo link recebido |
+| `/entrar/:código` | Convite para uma sala |
+| `/` | Minhas salas |
+| `/salas/nova` | Criar sala |
+| `/salas/:id` | Configurações da sala (dados, convite e membros) |
+| `/salas/:id/mesa` | A mesa de jogo (mapa, ferramentas, chat e fichas) |
 
 ## API
 
@@ -153,28 +176,48 @@ Todas as rotas, exceto as de cadastro, confirmação de e-mail, login e `/health
 | PATCH | `/rooms/:roomId/characters/:id` | Edita (mestre em qualquer uma; jogador só na própria, sem mudar dono nem visibilidade) |
 | DELETE | `/rooms/:roomId/characters/:id` | Apaga a ficha (só mestre) |
 
+### Chat
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/rooms/:roomId/messages` | Histórico: as últimas 100 mensagens, da mais antiga para a mais nova (só membros) |
+
 ### Outras
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | GET | `/health` | Verificação de saúde |
 
+## Tempo real (Socket.IO)
+
+A conexão usa o mesmo cookie de login da API. Sem login válido, o servidor recusa a conexão.
+
+| Evento | Direção | Descrição |
+| --- | --- | --- |
+| `room:join` | cliente → servidor | Entra no canal da sala (só membros). Recebe `{ ok }` ou `{ ok: false, error }` |
+| `chat:send` | cliente → servidor | Envia `{ roomId, content }` (até 1000 caracteres). Limite de 5 mensagens a cada 5 segundos por conexão |
+| `chat:message` | servidor → clientes | Mensagem nova, entregue a todos no canal da sala |
+
+As mensagens são salvas no banco. A participação na sala é conferida a cada envio.
+
 ## Deploy
 
-O backend serve o frontend compilado, então basta um serviço Node e um PostgreSQL.
+O backend serve o frontend compilado e o WebSocket, então basta um serviço Node e um PostgreSQL.
 
 - **Build:** `npm run build` (na raiz)
 - **Start:** `npm start` (aplica as migrations e sobe o servidor)
 - **Variáveis:** as mesmas do `backend/.env.example`, mais `NODE_ENV=production`
 
-Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **Neon** (PostgreSQL, usando a connection string direta, sem `-pooler`) e **Resend** (e-mail). Hospedagens gratuitas costumam bloquear portas SMTP, por isso o envio em produção usa a API HTTPS do Resend. O serviço gratuito do Render dorme quando fica parado, e o primeiro acesso depois disso demora cerca de um minuto.
+Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **Neon** (PostgreSQL, usando a connection string direta, sem `-pooler`) e **Resend** (e-mail). Hospedagens gratuitas costumam bloquear portas SMTP, por isso o envio em produção usa a API HTTPS do Resend. O serviço gratuito do Render dorme quando fica parado: o primeiro acesso demora cerca de um minuto, e as conexões do chat caem e se refazem sozinhas quando o serviço acorda.
 
 ## Observações técnicas
 
 - Prisma 7 com o gerador `prisma-client-js` e CommonJS. Mantenha a versão fixada (`prisma@7`).
 - Depois de mudar o `schema.prisma`, rode `npx prisma migrate dev` e depois `npx prisma generate`.
+- O Socket.IO roda sobre o mesmo servidor HTTP do Express (`http.createServer(app)`). O login vem do cookie `httpOnly`, lido no handshake.
 - Os campos específicos do D&D das fichas ficam em uma coluna JSON, validada pelo servidor com Zod para cada tipo de ficha. Isso permite evoluir a ficha ou suportar outros sistemas sem nova migration.
 - Os valores calculados das fichas (modificadores, bônus de proficiência, totais de perícias) são feitos no frontend, a partir dos atributos e do nível.
+- Quem sai da sala com a mesa aberta deixa de conseguir enviar mensagens, mas continua recebendo as novas até recarregar a página.
 - Nunca commite o arquivo `.env`.
 
 ## Roadmap
@@ -182,6 +225,11 @@ Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **
 - [x] Cadastro, login e confirmação de e-mail
 - [x] Salas com convite por link
 - [x] Fichas de personagem e de NPC (D&D 5e)
-- [ ] Mesa de jogo em tempo real: mapa, tokens, rolagem de dados e chat
+- [x] Mesa de jogo: layout com mapa, ferramentas e abas
+- [x] Chat em tempo real com histórico
+- [ ] Rolagem de dados (comandos no chat, como `/r 2d6+3`)
+- [ ] Upload de imagem de mapa
+- [ ] Tokens no mapa, em tempo real
 - [ ] Ligação entre fichas e tokens (vida e CA vindas da ficha)
-- [ ] Névoa de guerra, iniciativa e upload de mapas
+- [ ] Iniciativa e névoa de guerra
+- [ ] Domínio próprio, para enviar e-mails de confirmação a qualquer destinatário

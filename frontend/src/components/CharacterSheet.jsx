@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { api } from '../api';
-import CharacterForm from '../components/CharacterForm';
+import CharacterForm from './CharacterForm';
 import { ABILITIES, SKILLS, SIZES, modifier, proficiencyBonus, signed } from '../dnd';
 
 function Abilities({ abilities }) {
@@ -154,40 +153,27 @@ function NpcView({ data }) {
   );
 }
 
-export default function Character() {
-  const { id, characterId } = useParams();
+export default function CharacterSheet({ roomId, room, characterId, onChanged, onClose }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [room, setRoom] = useState(null);
   const [character, setCharacter] = useState(null);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    Promise.all([api(`/rooms/${id}`), api(`/rooms/${id}/characters/${characterId}`)])
-      .then(([roomData, characterData]) => {
-        setRoom(roomData.room);
-        setCharacter(characterData.character);
-      })
+    api(`/rooms/${roomId}/characters/${characterId}`)
+      .then((data) => setCharacter(data.character))
       .catch((err) => setError(err.message));
-  }, [id, characterId]);
+  }, [roomId, characterId]);
 
-  if (error) {
-    return (
-      <main className="content">
-        <p className="error">{error}</p>
-        <Link to={`/salas/${id}`}>Voltar para a sala</Link>
-      </main>
-    );
-  }
-  if (!room || !character) return <p className="center">Carregando...</p>;
+  if (error) return <p className="error">{error}</p>;
+  if (!character) return <p className="muted">Carregando...</p>;
 
   const isMaster = room.role === 'MASTER';
   const isOwner = character.type === 'PLAYER' && character.playerId === user.id;
   const canEdit = isMaster || isOwner;
   const players = room.members.filter((m) => m.role === 'PLAYER');
-  const url = `/rooms/${id}/characters/${characterId}`;
+  const url = `/rooms/${roomId}/characters/${characterId}`;
 
   async function run(action) {
     setActionError('');
@@ -198,131 +184,118 @@ export default function Character() {
     }
   }
 
-  async function save({ name, imageUrl, data }) {
-    const { character: updated } = await api(url, { method: 'PATCH', body: { name, imageUrl, data } });
+  async function update(body) {
+    const { character: updated } = await api(url, { method: 'PATCH', body });
     setCharacter(updated);
+    onChanged();
+    return updated;
+  }
+
+  async function save({ name, imageUrl, data }) {
+    await update({ name, imageUrl, data });
     setEditing(false);
   }
 
-  async function changeOwner(e) {
-    const { character: updated } = await api(url, {
-      method: 'PATCH',
-      body: { playerId: e.target.value || null },
-    });
-    setCharacter(updated);
-  }
-
-  async function toggleReveal() {
-    const { character: updated } = await api(url, {
-      method: 'PATCH',
-      body: { visibleToPlayers: !character.visibleToPlayers },
-    });
-    setCharacter(updated);
-  }
+  const changeOwner = (e) => update({ playerId: e.target.value || null });
+  const toggleReveal = () => update({ visibleToPlayers: !character.visibleToPlayers });
 
   async function remove() {
     if (!window.confirm(`Apagar a ficha "${character.name}"? Essa ação não pode ser desfeita.`)) return;
     await api(url, { method: 'DELETE' });
-    navigate(`/salas/${id}`);
+    onChanged();
+    onClose();
   }
 
   return (
-    <div className="home">
-      <header className="topbar">
-        <Link to={`/salas/${id}`}>← {room.name}</Link>
-        <strong>Grimório</strong>
-      </header>
+    <>
+      {actionError && <p className="error">{actionError}</p>}
 
-      <main className="content">
-        {actionError && <p className="error">{actionError}</p>}
-
-        <section className="card">
-          {editing ? (
-            <>
-              <h3>Editar ficha</h3>
-              <CharacterForm
-                type={character.type}
-                initial={character}
-                submitLabel="Salvar"
-                onSubmit={save}
-                onCancel={() => setEditing(false)}
-              />
-            </>
-          ) : (
-            <>
-              <div className="sheet-header">
-                {character.imageUrl && (
-                  <img
-                    key={character.imageUrl}
-                    className="portrait"
-                    src={character.imageUrl}
-                    alt=""
-                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                  />
-                )}
-                <div>
-                  <h2>{character.name}</h2>
-                  <div className="actions">
-                    <span className={`badge ${character.type === 'NPC' ? '' : 'master'}`}>
-                      {character.type === 'PLAYER' ? 'Personagem' : 'NPC'}
-                    </span>
-                    {character.type === 'PLAYER' && (
-                      <span className="muted">Jogador: {character.playerName ?? 'não atribuído'}</span>
-                    )}
-                    {character.type === 'NPC' && isMaster && (
-                      <span className="badge">
-                        {character.visibleToPlayers ? 'Revelado aos jogadores' : 'Oculto dos jogadores'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {canEdit && (
+      <section className="card">
+        {editing ? (
+          <>
+            <h3>Editar ficha</h3>
+            <CharacterForm
+              type={character.type}
+              initial={character}
+              submitLabel="Salvar"
+              onSubmit={save}
+              onCancel={() => setEditing(false)}
+            />
+          </>
+        ) : (
+          <>
+            <div className="sheet-header">
+              {character.imageUrl && (
+                <img
+                  key={character.imageUrl}
+                  className="portrait"
+                  src={character.imageUrl}
+                  alt=""
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
+              )}
+              <div>
+                <h2>{character.name}</h2>
                 <div className="actions">
-                  <button onClick={() => setEditing(true)}>Editar ficha</button>
-                  {isMaster && (
-                    <button className="danger" onClick={() => run(remove)}>Apagar ficha</button>
+                  <span className={`badge ${character.type === 'NPC' ? '' : 'master'}`}>
+                    {character.type === 'PLAYER' ? 'Personagem' : 'NPC'}
+                  </span>
+                  {character.type === 'PLAYER' && (
+                    <span className="muted">Jogador: {character.playerName ?? 'não atribuído'}</span>
+                  )}
+                  {character.type === 'NPC' && isMaster && (
+                    <span className="badge">
+                      {character.visibleToPlayers ? 'Revelado aos jogadores' : 'Oculto dos jogadores'}
+                    </span>
                   )}
                 </div>
-              )}
-            </>
-          )}
-        </section>
-
-        {!editing && isMaster && character.type === 'PLAYER' && (
-          <section className="card">
-            <label>
-              Jogador responsável
-              <select value={character.playerId ?? ''} onChange={(e) => run(() => changeOwner(e))}>
-                <option value="">Sem jogador</option>
-                {players.map((m) => (
-                  <option key={m.userId} value={m.userId}>{m.name}</option>
-                ))}
-              </select>
-              <span className="hint">O jogador escolhido pode ver e editar esta ficha.</span>
-            </label>
-          </section>
-        )}
-
-        {!editing && isMaster && character.type === 'NPC' && (
-          <section className="card">
-            <p className="muted">
-              {character.visibleToPlayers
-                ? 'Os jogadores veem este NPC (sem as anotações secretas).'
-                : 'Só você vê este NPC.'}
-            </p>
-            <div className="actions">
-              <button className="ghost" onClick={() => run(toggleReveal)}>
-                {character.visibleToPlayers ? 'Ocultar dos jogadores' : 'Revelar aos jogadores'}
-              </button>
+              </div>
             </div>
-          </section>
-        )}
 
-        {!editing &&
-          (character.type === 'PLAYER' ? <PlayerView data={character.data} /> : <NpcView data={character.data} />)}
-      </main>
-    </div>
+            {canEdit && (
+              <div className="actions">
+                <button onClick={() => setEditing(true)}>Editar ficha</button>
+                {isMaster && (
+                  <button className="danger" onClick={() => run(remove)}>Apagar ficha</button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {!editing && isMaster && character.type === 'PLAYER' && (
+        <section className="card">
+          <label>
+            Jogador responsável
+            <select value={character.playerId ?? ''} onChange={(e) => run(() => changeOwner(e))}>
+              <option value="">Sem jogador</option>
+              {players.map((m) => (
+                <option key={m.userId} value={m.userId}>{m.name}</option>
+              ))}
+            </select>
+            <span className="hint">O jogador escolhido pode ver e editar esta ficha.</span>
+          </label>
+        </section>
+      )}
+
+      {!editing && isMaster && character.type === 'NPC' && (
+        <section className="card">
+          <p className="muted">
+            {character.visibleToPlayers
+              ? 'Os jogadores veem este NPC (sem as anotações secretas).'
+              : 'Só você vê este NPC.'}
+          </p>
+          <div className="actions">
+            <button className="ghost" onClick={() => run(toggleReveal)}>
+              {character.visibleToPlayers ? 'Ocultar dos jogadores' : 'Revelar aos jogadores'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!editing &&
+        (character.type === 'PLAYER' ? <PlayerView data={character.data} /> : <NpcView data={character.data} />)}
+    </>
   );
 }

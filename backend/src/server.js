@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -8,6 +9,8 @@ const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/auth');
 const roomRoutes = require('./routes/rooms');
 const characterRoutes = require('./routes/characters');
+const messageRoutes = require('./routes/messages');
+const { iniciarTempoReal } = require('./realtime');
 const { iniciarLimpezaDeContas } = require('./jobs/limparContasNaoConfirmadas');
 
 if (!process.env.JWT_SECRET) {
@@ -43,6 +46,7 @@ app.use('/auth/login', limiteAuth);
 app.use('/auth/resend-verification', limiteAuth);
 app.use('/auth', authRoutes);
 app.use('/rooms/:roomId/characters', characterRoutes);
+app.use('/rooms/:roomId/messages', messageRoutes);
 app.use('/rooms', roomRoutes);
 
 // Em produção o backend também serve o frontend compilado (mesma origem, sem CORS)
@@ -60,8 +64,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
+// O Socket.IO precisa do servidor HTTP por baixo do Express
+const server = http.createServer(app);
+iniciarTempoReal(server);
+
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Grimório API rodando em http://localhost:${port}`);
   iniciarLimpezaDeContas();
 });

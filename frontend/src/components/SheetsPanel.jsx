@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
 
-export default function CharacterList({ roomId, isMaster }) {
+export default function SheetsPanel({ roomId, isMaster, refreshKey, onOpen, onNew }) {
   const [characters, setCharacters] = useState(null);
   const [error, setError] = useState('');
 
@@ -10,22 +9,19 @@ export default function CharacterList({ roomId, isMaster }) {
     api(`/rooms/${roomId}/characters`)
       .then((data) => setCharacters(data.characters))
       .catch((err) => setError(err.message));
-  }, [roomId]);
+  }, [roomId, refreshKey]);
 
   const players = (characters ?? []).filter((c) => c.type === 'PLAYER');
   const npcs = (characters ?? []).filter((c) => c.type === 'NPC');
 
   return (
-    <section className="card">
-      <div className="row">
-        <h3>Fichas</h3>
-        {isMaster && (
-          <div className="actions">
-            <Link className="btn" to={`/salas/${roomId}/fichas/nova?tipo=jogador`}>Nova ficha de jogador</Link>
-            <Link className="btn ghost" to={`/salas/${roomId}/fichas/nova?tipo=npc`}>Nova ficha de NPC</Link>
-          </div>
-        )}
-      </div>
+    <div className="sheets-panel">
+      {isMaster && (
+        <div className="actions stack">
+          <button onClick={() => onNew('PLAYER')}>Nova ficha de jogador</button>
+          <button className="ghost" onClick={() => onNew('NPC')}>Nova ficha de NPC</button>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {!characters && !error && <p className="muted">Carregando...</p>}
@@ -40,7 +36,7 @@ export default function CharacterList({ roomId, isMaster }) {
           <h4 className="group-title">Personagens</h4>
           <div className="sheet-list">
             {players.map((c) => (
-              <Link key={c.id} to={`/salas/${roomId}/fichas/${c.id}`} className="sheet-item">
+              <button key={c.id} type="button" className="sheet-item" onClick={() => onOpen(c.id)}>
                 <div>
                   <strong>{c.name}</strong>
                   <div className="muted">
@@ -48,7 +44,7 @@ export default function CharacterList({ roomId, isMaster }) {
                   </div>
                 </div>
                 <span className="badge">{c.playerName ?? 'Sem jogador'}</span>
-              </Link>
+              </button>
             ))}
           </div>
         </>
@@ -59,7 +55,7 @@ export default function CharacterList({ roomId, isMaster }) {
           <h4 className="group-title">NPCs</h4>
           <div className="sheet-list">
             {npcs.map((c) => (
-              <Link key={c.id} to={`/salas/${roomId}/fichas/${c.id}`} className="sheet-item">
+              <button key={c.id} type="button" className="sheet-item" onClick={() => onOpen(c.id)}>
                 <div>
                   <strong>{c.name}</strong>
                   <div className="muted">
@@ -71,11 +67,11 @@ export default function CharacterList({ roomId, isMaster }) {
                     {c.visibleToPlayers ? 'Revelado' : 'Oculto'}
                   </span>
                 )}
-              </Link>
+              </button>
             ))}
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 }
