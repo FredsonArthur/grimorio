@@ -1,6 +1,6 @@
 # Grimório
 
-Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edição. O mestre cria uma sala, convida os jogadores por um link e, nas próximas etapas, joga com mapa, fichas, dados e chat em tempo real.
+Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edição. O mestre cria uma sala, convida os jogadores por um link e monta as fichas de personagens e NPCs. Nas próximas etapas, a mesa ganha mapa, tokens, rolagem de dados e chat em tempo real.
 
 > "D&D" e "Dungeons & Dragons" são marcas registradas da Wizards of the Coast. Este é um projeto independente, sem afiliação.
 
@@ -10,7 +10,10 @@ Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edi�
 - Login com sessão em cookie `httpOnly`
 - **Salas de RPG**: criar, listar, editar e apagar, com capa, sistema de regras, tipo de jogo, nível inicial, limite de jogadores e agenda
 - **Convite por link**: copiar, compartilhar (WhatsApp, Telegram, e-mail) e gerar um novo link quando quiser
-- Papéis de mestre e jogador, com permissões diferentes
+- Papéis de **mestre** e **jogador**, com permissões diferentes
+- **Fichas de D&D 5e**, criadas pelo mestre, em dois formatos:
+  - **Personagem de jogador**: identidade, nível, atributos, vida, CA, salvaguardas e perícias, ataques, equipamento, magias e anotações, com modificadores, bônus de proficiência e totais calculados. O jogador responsável vê e edita a própria ficha
+  - **NPC**: formato de criatura, com tipo, tamanho, ND, atributos, ações e **anotações secretas** do mestre. Fica oculto por padrão, e o mestre pode revelá-lo aos jogadores (sem as anotações secretas)
 
 ## Tecnologias
 
@@ -29,13 +32,14 @@ grimorio/
 │   └── src/
 │       ├── jobs/        # limpeza de contas não confirmadas
 │       ├── middleware/  # autenticação
-│       ├── routes/      # auth e rooms
+│       ├── routes/      # auth, rooms e characters
 │       ├── scripts/     # teste de envio de e-mail
 │       └── utils/       # e-mail e validação
 ├── frontend/
 │   └── src/
-│       ├── components/
-│       └── pages/
+│       ├── components/  # formulários e listas reutilizáveis
+│       ├── pages/       # telas
+│       └── dnd.js       # tabelas e fórmulas de D&D 5e
 └── package.json         # scripts de build e start para o deploy
 ```
 
@@ -112,6 +116,10 @@ node src/scripts/testar-email.js destino@exemplo.com
 
 ## API
 
+Todas as rotas, exceto as de cadastro, confirmação de e-mail, login e `/health`, exigem login.
+
+### Contas
+
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | POST | `/auth/register` | Cria a conta pendente e envia o e-mail de confirmação |
@@ -120,6 +128,11 @@ node src/scripts/testar-email.js destino@exemplo.com
 | POST | `/auth/login` | Entra (exige e-mail confirmado) |
 | POST | `/auth/logout` | Sai |
 | GET | `/auth/me` | Dados do usuário logado |
+
+### Salas
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
 | GET | `/rooms` | Lista as salas do usuário |
 | POST | `/rooms` | Cria uma sala (quem cria vira o mestre) |
 | GET | `/rooms/:id` | Detalhes da sala (só membros) |
@@ -129,6 +142,21 @@ node src/scripts/testar-email.js destino@exemplo.com
 | POST | `/rooms/:id/leave` | Sai da sala (jogador) |
 | GET | `/rooms/join/:code` | Prévia do convite |
 | POST | `/rooms/join/:code` | Entra na sala pelo convite |
+
+### Fichas
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/rooms/:roomId/characters` | Lista as fichas (mestre: todas; jogador: as suas e os NPCs revelados) |
+| POST | `/rooms/:roomId/characters` | Cria uma ficha de jogador ou de NPC (só mestre) |
+| GET | `/rooms/:roomId/characters/:id` | Vê uma ficha |
+| PATCH | `/rooms/:roomId/characters/:id` | Edita (mestre em qualquer uma; jogador só na própria, sem mudar dono nem visibilidade) |
+| DELETE | `/rooms/:roomId/characters/:id` | Apaga a ficha (só mestre) |
+
+### Outras
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
 | GET | `/health` | Verificação de saúde |
 
 ## Deploy
@@ -139,16 +167,21 @@ O backend serve o frontend compilado, então basta um serviço Node e um Postgre
 - **Start:** `npm start` (aplica as migrations e sobe o servidor)
 - **Variáveis:** as mesmas do `backend/.env.example`, mais `NODE_ENV=production`
 
+Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **Neon** (PostgreSQL, usando a connection string direta, sem `-pooler`) e **Resend** (e-mail). Hospedagens gratuitas costumam bloquear portas SMTP, por isso o envio em produção usa a API HTTPS do Resend. O serviço gratuito do Render dorme quando fica parado, e o primeiro acesso depois disso demora cerca de um minuto.
+
 ## Observações técnicas
 
 - Prisma 7 com o gerador `prisma-client-js` e CommonJS. Mantenha a versão fixada (`prisma@7`).
 - Depois de mudar o `schema.prisma`, rode `npx prisma migrate dev` e depois `npx prisma generate`.
+- Os campos específicos do D&D das fichas ficam em uma coluna JSON, validada pelo servidor com Zod para cada tipo de ficha. Isso permite evoluir a ficha ou suportar outros sistemas sem nova migration.
+- Os valores calculados das fichas (modificadores, bônus de proficiência, totais de perícias) são feitos no frontend, a partir dos atributos e do nível.
 - Nunca commite o arquivo `.env`.
 
 ## Roadmap
 
 - [x] Cadastro, login e confirmação de e-mail
 - [x] Salas com convite por link
+- [x] Fichas de personagem e de NPC (D&D 5e)
 - [ ] Mesa de jogo em tempo real: mapa, tokens, rolagem de dados e chat
-- [ ] Fichas de personagem de D&D 5e
+- [ ] Ligação entre fichas e tokens (vida e CA vindas da ficha)
 - [ ] Névoa de guerra, iniciativa e upload de mapas
