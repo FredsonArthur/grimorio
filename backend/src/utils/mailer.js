@@ -1,11 +1,12 @@
 const nodemailer = require('nodemailer');
 
 const isProd = process.env.NODE_ENV === 'production';
+const brevoKey = process.env.BREVO_API_KEY;
 const resendKey = process.env.RESEND_API_KEY;
 const smtpConfigured = Boolean(process.env.SMTP_HOST);
 
-if (isProd && !resendKey && !smtpConfigured) {
-  throw new Error('Defina RESEND_API_KEY ou SMTP_HOST: em produção o envio de e-mail é obrigatório');
+if (isProd && !brevoKey && !resendKey && !smtpConfigured) {
+  throw new Error('Defina BREVO_API_KEY, RESEND_API_KEY ou SMTP_HOST: em produção o envio de e-mail é obrigatório');
 }
 
 const transporter = smtpConfigured
@@ -21,7 +22,7 @@ const transporter = smtpConfigured
 
 const from = process.env.MAIL_FROM || 'Grimório <no-reply@localhost>';
 
-if (!resendKey && !smtpConfigured) {
+if (!brevoKey && !resendKey && !smtpConfigured) {
   console.warn('Aviso: e-mail não configurado. Os e-mails serão apenas exibidos neste terminal, não enviados.');
 }
 
@@ -35,7 +36,40 @@ function escapeHtml(value) {
   })[c]);
 }
 
-// Envio pela API HTTPS do Resend (funciona em hospedagens que bloqueiam portas SMTP)
+// Separa 'Grimório <endereco@exemplo.com>' em nome e e-mail (o Brevo pede os dois separados)
+function separarRemetente(valor) {
+  const m = valor.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  if (!m) return { email: valor.trim() };
+  const name = m[1].trim();
+  return name ? { name, email: m[2].trim() } : { email: m[2].trim() };
+}
+
+// Envio pela API HTTPS do Brevo (funciona em hospedagens que bloqueiam portas SMTP)
+async function enviarPorBrevo({ to, subject, html, text }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': brevoKey,
+      accept: 'application/json',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: separarRemetente(from),
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const detalhe = await res.text().catch(() => '');
+    throw new Error(`Brevo respondeu ${res.status}: ${detalhe}`);
+  }
+}
+
+// Envio pela API HTTPS do Resend
 async function enviarPorResend({ to, subject, html, text }) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -54,6 +88,7 @@ async function enviarPorResend({ to, subject, html, text }) {
 }
 
 async function enviarEmail({ to, subject, html, text }) {
+  if (brevoKey) return enviarPorBrevo({ to, subject, html, text });
   if (resendKey) return enviarPorResend({ to, subject, html, text });
 
   if (transporter) {

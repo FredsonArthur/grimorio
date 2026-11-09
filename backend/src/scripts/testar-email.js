@@ -10,14 +10,17 @@ async function main() {
     process.exit(1);
   }
 
+  const usandoBrevo = Boolean(process.env.BREVO_API_KEY);
   const usandoResend = Boolean(process.env.RESEND_API_KEY);
 
-  if (!usandoResend && !process.env.SMTP_HOST) {
-    console.error('Defina RESEND_API_KEY ou SMTP_HOST no .env: nada seria enviado de verdade.');
+  if (!usandoBrevo && !usandoResend && !process.env.SMTP_HOST) {
+    console.error('Defina BREVO_API_KEY, RESEND_API_KEY ou SMTP_HOST no .env: nada seria enviado de verdade.');
     process.exit(1);
   }
 
-  if (usandoResend) {
+  if (usandoBrevo) {
+    console.log('Usando a API do Brevo.');
+  } else if (usandoResend) {
     console.log('Usando a API do Resend.');
   } else {
     const port = Number(process.env.SMTP_PORT || 587);
