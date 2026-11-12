@@ -30,7 +30,7 @@ Tabletop virtual de RPG em formato web app, começando pelo sistema D&D 5ª edi�
 - **Tempo real:** Socket.IO (WebSocket)
 - **Banco de dados:** PostgreSQL com Prisma 7
 - **Autenticação:** bcrypt e JWT em cookie `httpOnly`
-- **E-mail:** Resend (API) ou SMTP, com Nodemailer
+- **E-mail:** Brevo (API), Resend (API) ou SMTP, com Nodemailer
 
 ## Estrutura
 
@@ -51,6 +51,7 @@ grimorio/
 │       ├── pages/       # telas
 │       ├── dnd.js       # tabelas e fórmulas de D&D 5e
 │       └── socket.js    # conexão em tempo real
+├── LICENSE
 └── package.json         # scripts de build e start para o deploy
 ```
 
@@ -112,17 +113,17 @@ Abra `http://localhost:5173`. O chat precisa dos dois servidores rodando.
 
 ## E-mail
 
-Escolha uma opção no `backend/.env`:
+O provedor é escolhido pelo `backend/.env`. Se houver mais de um configurado, a ordem de preferência é **Brevo, Resend e SMTP**. Sem nenhum, em desenvolvimento o e-mail só aparece no terminal.
 
-- **Nenhuma (só desenvolvimento):** o e-mail é exibido no terminal, sem envio.
-- **Resend (recomendado para produção):** defina `RESEND_API_KEY` e `MAIL_FROM`. Para enviar a qualquer destinatário, é preciso verificar um domínio no Resend.
+- **Brevo (API):** defina `BREVO_API_KEY` e `MAIL_FROM`. Funciona sem domínio próprio e em hospedagens que bloqueiam SMTP. O endereço do `MAIL_FROM` precisa estar verificado no painel do Brevo, e a chave de API só precisa da permissão de e-mails transacionais. Com um endereço gratuito (como Gmail), o Brevo substitui o remetente e os e-mails podem cair no spam.
+- **Resend (API):** defina `RESEND_API_KEY` e `MAIL_FROM`. Para enviar a qualquer destinatário, é preciso verificar um domínio no Resend.
 - **SMTP:** defina `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `MAIL_FROM`. Com Gmail, use uma senha de app (exige verificação em duas etapas).
 
 Para testar o envio sem fazer um cadastro:
 
 ```bash
 cd backend
-node src/scripts/testar-email.js destino@exemplo.com
+npm run test:email -- destino@exemplo.com
 ```
 
 ## Telas
@@ -208,7 +209,7 @@ O backend serve o frontend compilado e o WebSocket, então basta um serviço Nod
 - **Start:** `npm start` (aplica as migrations e sobe o servidor)
 - **Variáveis:** as mesmas do `backend/.env.example`, mais `NODE_ENV=production`
 
-Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **Neon** (PostgreSQL, usando a connection string direta, sem `-pooler`) e **Resend** (e-mail). Hospedagens gratuitas costumam bloquear portas SMTP, por isso o envio em produção usa a API HTTPS do Resend. O serviço gratuito do Render dorme quando fica parado: o primeiro acesso demora cerca de um minuto, e as conexões do chat caem e se refazem sozinhas quando o serviço acorda.
+Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **Neon** (PostgreSQL, usando a connection string direta, sem `-pooler`) e **Brevo** (e-mail). Hospedagens gratuitas costumam bloquear portas SMTP, por isso o envio em produção usa a API HTTPS do Brevo ou do Resend. O serviço gratuito do Render dorme quando fica parado: o primeiro acesso demora cerca de um minuto, e as conexões do chat caem e se refazem sozinhas quando o serviço acorda.
 
 ## Observações técnicas
 
@@ -232,4 +233,8 @@ Uma combinação que funciona em planos gratuitos: **Render** (serviço web), **
 - [ ] Tokens no mapa, em tempo real
 - [ ] Ligação entre fichas e tokens (vida e CA vindas da ficha)
 - [ ] Iniciativa e névoa de guerra
-- [ ] Domínio próprio, para enviar e-mails de confirmação a qualquer destinatário
+- [ ] Domínio próprio, para um e-mail profissional (SPF, DKIM e DMARC)
+
+## Licença
+
+MIT. Veja o arquivo [LICENSE](LICENSE).

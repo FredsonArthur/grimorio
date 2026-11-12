@@ -1,6 +1,12 @@
 {
   "name": "grimorio",
+  "version": "1.0.0",
   "private": true,
+  "description": "Tabletop virtual de RPG em formato web app",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install --include=dev && npm --prefix backend run build",
     "start": "npm --prefix backend run start:prod"
