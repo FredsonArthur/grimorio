@@ -5,7 +5,7 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const authRoutes = require('./routes/auth');
 const roomRoutes = require('./routes/rooms');
 const characterRoutes = require('./routes/characters');
@@ -27,13 +27,37 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-const limiteAuth = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
+// Limites de tentativas, cada rota com o seu contador
+const baseLimite = {
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' },
+};
+const chaveIp = (req) => ipKeyGenerator(req.ip ?? '');
+const chaveIpEmail = (req) =>
+  `${chaveIp(req)}|${String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254)}`;
+
+// Cada cadastro dispara um e-mail
+const limiteCadastro = rateLimit({ ...baseLimite, windowMs: 60 * 60 * 1000, limit: 20, keyGenerator: chaveIp });
+
+// Login: só as tentativas que falham contam, por conta (IP + e-mail) e pelo IP como um todo
+const limiteLoginConta = rateLimit({
+  ...baseLimite,
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: chaveIpEmail,
 });
+const limiteLoginIp = rateLimit({
+  ...baseLimite,
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  skipSuccessfulRequests: true,
+  keyGenerator: chaveIp,
+});
+
+// Reenvio do e-mail de confirmação
+const limiteReenvio = rateLimit({ ...baseLimite, windowMs: 15 * 60 * 1000, limit: 5, keyGenerator: chaveIpEmail });
 
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
@@ -41,13 +65,18 @@ app.use(cookieParser());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-app.use('/auth/register', limiteAuth);
-app.use('/auth/login', limiteAuth);
-app.use('/auth/resend-verification', limiteAuth);
+app.use('/auth/register', limiteCadastro);
+app.use('/auth/login', limiteLoginIp, limiteLoginConta);
+app.use('/auth/resend-verification', limiteReenvio);
 app.use('/auth', authRoutes);
 app.use('/rooms/:roomId/characters', characterRoutes);
 app.use('/rooms/:roomId/messages', messageRoutes);
 app.use('/rooms', roomRoutes);
+
+// Rotas da API que não existem respondem 404 em JSON (e não a página inicial do site)
+app.use(['/auth', '/rooms'], (req, res) => {
+  res.status(404).json({ error: 'Rota não encontrada' });
+});
 
 // Em produção o backend também serve o frontend compilado (mesma origem, sem CORS)
 const distPath = path.join(__dirname, '..', '..', 'frontend', 'dist');
@@ -66,7 +95,8 @@ app.use((err, req, res, next) => {
 
 // O Socket.IO precisa do servidor HTTP por baixo do Express
 const server = http.createServer(app);
-iniciarTempoReal(server);
+const io = iniciarTempoReal(server);
+app.set('io', io); // as rotas usam para mexer nos canais (sair da sala, logout)
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {

@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const prisma = require('./prisma');
+const { canalSala, canalUsuario } = require('./utils/canais');
 
 // O login fica em um cookie httpOnly, então o servidor lê o cookie do handshake
 function lerCookie(header, nome) {
@@ -21,8 +22,6 @@ const mensagemSchema = z.object({
     .min(1, 'Escreva uma mensagem')
     .max(1000, 'Mensagem muito longa (máximo de 1000 caracteres)'),
 });
-
-const canal = (roomId) => `room:${roomId}`;
 
 const getMembership = (roomId, userId) =>
   prisma.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
@@ -54,6 +53,9 @@ function iniciarTempoReal(httpServer) {
   });
 
   io.on('connection', (socket) => {
+    // Canal pessoal: permite às rotas (logout, sair da sala) mexer em todas as conexões do usuário
+    socket.join(canalUsuario(socket.data.userId));
+
     // Entrar no canal da sala (só membros)
     socket.on('room:join', async (roomId, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
@@ -63,7 +65,7 @@ function iniciarTempoReal(httpServer) {
         const membership = await getMembership(roomId, socket.data.userId);
         if (!membership) return reply({ ok: false, error: 'Sala não encontrada' });
 
-        socket.join(canal(roomId));
+        socket.join(canalSala(roomId));
         reply({ ok: true });
       } catch (err) {
         console.error('Erro ao entrar na sala:', err);
@@ -96,7 +98,7 @@ function iniciarTempoReal(httpServer) {
           data: { roomId, userId: socket.data.userId, content },
         });
 
-        io.to(canal(roomId)).emit('chat:message', {
+        io.to(canalSala(roomId)).emit('chat:message', {
           id: message.id,
           roomId,
           userId: socket.data.userId,

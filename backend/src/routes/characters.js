@@ -32,6 +32,10 @@ const atributos = z.object({
   cha: inteiro(1, 30, 'Carisma'),
 });
 
+// A vida atual nunca pode passar da vida máxima (a vida temporária é separada)
+const vidaAtualDentroDoMaximo = (hp) => hp.current <= hp.max;
+const erroVida = { error: 'A vida atual não pode passar da vida máxima', path: ['current'] };
+
 const dadosJogador = z.object({
   class: texto(40),
   subclass: texto(40),
@@ -41,11 +45,13 @@ const dadosJogador = z.object({
   level: inteiro(1, 20, 'Nível'),
   xp: inteiro(0, 1000000, 'XP'),
   abilities: atributos,
-  hp: z.object({
-    max: inteiro(0, 999, 'Vida máxima'),
-    current: inteiro(0, 999, 'Vida atual'),
-    temp: inteiro(0, 999, 'Vida temporária'),
-  }),
+  hp: z
+    .object({
+      max: inteiro(0, 999, 'Vida máxima'),
+      current: inteiro(0, 999, 'Vida atual'),
+      temp: inteiro(0, 999, 'Vida temporária'),
+    })
+    .refine(vidaAtualDentroDoMaximo, erroVida),
   ac: inteiro(0, 40, 'Classe de Armadura'),
   speed: texto(40),
   savingThrows: z.array(z.enum(ATRIBUTOS)).max(6),
@@ -70,10 +76,12 @@ const dadosNpc = z.object({
   size: z.enum(['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan']),
   challenge: texto(10),
   abilities: atributos,
-  hp: z.object({
-    max: inteiro(0, 9999, 'Vida máxima'),
-    current: inteiro(0, 9999, 'Vida atual'),
-  }),
+  hp: z
+    .object({
+      max: inteiro(0, 9999, 'Vida máxima'),
+      current: inteiro(0, 9999, 'Vida atual'),
+    })
+    .refine(vidaAtualDentroDoMaximo, erroVida),
   ac: inteiro(0, 40, 'Classe de Armadura'),
   speed: texto(80),
   senses: texto(200),

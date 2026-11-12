@@ -6,6 +6,7 @@ const { z } = require('zod');
 const prisma = require('../prisma');
 const requireAuth = require('../middleware/auth');
 const validar = require('../utils/validar');
+const { canalUsuario } = require('../utils/canais');
 const { enviarEmail, emailConfirmacao } = require('../utils/mailer');
 
 const router = express.Router();
@@ -84,15 +85,26 @@ router.post('/register', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(data.password, 12);
-  const user = await prisma.user.create({
-    data: { name: data.name, email, passwordHash },
-  });
+
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: { name: data.name, email, passwordHash },
+    });
+  } catch (err) {
+    // Dois cadastros do mesmo e-mail ao mesmo tempo: o segundo bate na restrição de unicidade
+    if (err.code === 'P2002') return res.status(409).json({ error: 'E-mail já cadastrado' });
+    throw err;
+  }
 
   try {
     await enviarConfirmacao(user);
   } catch (err) {
     console.error('Falha ao enviar o e-mail de confirmação:', err);
-    await prisma.user.delete({ where: { id: user.id } });
+    // Se desfazer a conta também falhar, a limpeza de contas pendentes remove depois
+    await prisma.user
+      .delete({ where: { id: user.id } })
+      .catch((e) => console.error('Falha ao desfazer a conta pendente:', e));
     return res.status(502).json({
       error: 'Não foi possível enviar o e-mail de confirmação. Tente novamente em instantes.',
     });
@@ -178,6 +190,14 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  // Derruba as conexões em tempo real abertas da pessoa (se o cookie ainda for válido)
+  try {
+    const payload = jwt.verify(req.cookies.token, process.env.JWT_SECRET);
+    req.app.get('io')?.in(canalUsuario(payload.sub)).disconnectSockets(true);
+  } catch {
+    // sem sessão válida: não há nada para desconectar
+  }
+
   res.clearCookie('token');
   res.status(204).end();
 });

@@ -4,6 +4,7 @@ const { z } = require('zod');
 const prisma = require('../prisma');
 const requireAuth = require('../middleware/auth');
 const validar = require('../utils/validar');
+const { canalSala, canalUsuario } = require('../utils/canais');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -51,8 +52,16 @@ const resumo = (room) => ({
 
 const contarJogadores = (members) => members.filter((m) => m.role === 'PLAYER').length;
 
+// Contagem de jogadores feita no banco, sem carregar a lista de membros
+const contagemDeJogadores = { _count: { select: { members: { where: { role: 'PLAYER' } } } } };
+
 const getMembership = (roomId, userId) =>
   prisma.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
+
+// Bloqueia a linha da sala até o fim da transação: entradas e mudanças de limite
+// simultâneas passam uma de cada vez, e o limite de jogadores não é ultrapassado.
+const travarSala = (tx, roomId) =>
+  tx.$queryRaw`SELECT max_players AS "maxPlayers" FROM rooms WHERE id = ${roomId} FOR UPDATE`;
 
 // Garante que o usuário é membro e mestre da sala; responde o erro e devolve null se não for.
 async function exigirMestre(req, res) {
@@ -94,7 +103,7 @@ router.get('/', async (req, res) => {
       room: {
         include: {
           owner: { select: { name: true } },
-          members: { select: { role: true } },
+          ...contagemDeJogadores,
         },
       },
     },
@@ -104,7 +113,7 @@ router.get('/', async (req, res) => {
     ...resumo(m.room),
     role: m.role,
     ownerName: m.room.owner.name,
-    playerCount: contarJogadores(m.room.members),
+    playerCount: m.room._count.members,
     createdAt: m.room.createdAt,
   }));
 
@@ -117,12 +126,12 @@ router.get('/join/:code', async (req, res) => {
     where: { inviteCode: req.params.code },
     include: {
       owner: { select: { name: true } },
-      members: { select: { role: true } },
+      ...contagemDeJogadores,
     },
   });
   if (!room) return res.status(404).json({ error: 'Convite inválido ou expirado' });
 
-  const playerCount = contarJogadores(room.members);
+  const playerCount = room._count.members;
   const membership = await getMembership(room.id, req.userId);
 
   res.json({
@@ -136,22 +145,28 @@ router.get('/join/:code', async (req, res) => {
 router.post('/join/:code', async (req, res) => {
   const room = await prisma.room.findUnique({
     where: { inviteCode: req.params.code },
-    include: { members: { select: { userId: true, role: true } } },
+    select: { id: true },
   });
   if (!room) return res.status(404).json({ error: 'Convite inválido ou expirado' });
 
-  if (room.members.some((m) => m.userId === req.userId)) {
-    return res.json({ roomId: room.id });
-  }
-  if (contarJogadores(room.members) >= room.maxPlayers) {
-    return res.status(409).json({ error: 'A sala está cheia' });
-  }
+  const resultado = await prisma.$transaction(async (tx) => {
+    const [sala] = await travarSala(tx, room.id);
+    if (!sala) return 'inexistente';
 
-  await prisma.roomMember.upsert({
-    where: { roomId_userId: { roomId: room.id, userId: req.userId } },
-    update: {},
-    create: { roomId: room.id, userId: req.userId, role: 'PLAYER' },
+    const jaMembro = await tx.roomMember.findUnique({
+      where: { roomId_userId: { roomId: room.id, userId: req.userId } },
+    });
+    if (jaMembro) return 'ja-membro';
+
+    const jogadores = await tx.roomMember.count({ where: { roomId: room.id, role: 'PLAYER' } });
+    if (jogadores >= sala.maxPlayers) return 'cheia';
+
+    await tx.roomMember.create({ data: { roomId: room.id, userId: req.userId, role: 'PLAYER' } });
+    return 'entrou';
   });
+
+  if (resultado === 'inexistente') return res.status(404).json({ error: 'Convite inválido ou expirado' });
+  if (resultado === 'cheia') return res.status(409).json({ error: 'A sala está cheia' });
 
   res.json({ roomId: room.id });
 });
@@ -190,25 +205,37 @@ router.patch('/:id', async (req, res) => {
   const data = validar(roomUpdateSchema, req.body, res);
   if (!data) return;
 
-  if (data.maxPlayers !== undefined) {
-    const jogadores = await prisma.roomMember.count({
-      where: { roomId: req.params.id, role: 'PLAYER' },
-    });
-    if (data.maxPlayers < jogadores) {
-      return res.status(400).json({
-        error: 'Dados inválidos',
-        details: [
-          {
-            campo: 'maxPlayers',
-            mensagem: `A sala já tem ${jogadores} jogador(es); o limite não pode ser menor que isso`,
-          },
-        ],
-      });
-    }
+  // Sem mudar o limite de jogadores, não há corrida possível
+  if (data.maxPlayers === undefined) {
+    const room = await prisma.room.update({ where: { id: req.params.id }, data });
+    return res.json({ room: resumo(room) });
   }
 
-  const room = await prisma.room.update({ where: { id: req.params.id }, data });
-  res.json({ room: resumo(room) });
+  // Mudando o limite: conta os jogadores e atualiza dentro de uma transação com a sala bloqueada
+  const resultado = await prisma.$transaction(async (tx) => {
+    await travarSala(tx, req.params.id);
+
+    const jogadores = await tx.roomMember.count({
+      where: { roomId: req.params.id, role: 'PLAYER' },
+    });
+    if (data.maxPlayers < jogadores) return { jogadores };
+
+    return { room: await tx.room.update({ where: { id: req.params.id }, data }) };
+  });
+
+  if ('jogadores' in resultado) {
+    return res.status(400).json({
+      error: 'Dados inválidos',
+      details: [
+        {
+          campo: 'maxPlayers',
+          mensagem: `A sala já tem ${resultado.jogadores} jogador(es); o limite não pode ser menor que isso`,
+        },
+      ],
+    });
+  }
+
+  res.json({ room: resumo(resultado.room) });
 });
 
 // Apagar sala (só mestre)
@@ -216,6 +243,10 @@ router.delete('/:id', async (req, res) => {
   if (!(await exigirMestre(req, res))) return;
 
   await prisma.room.delete({ where: { id: req.params.id } });
+
+  // Esvazia o canal do chat da sala apagada
+  req.app.get('io')?.in(canalSala(req.params.id)).socketsLeave(canalSala(req.params.id));
+
   res.status(204).end();
 });
 
@@ -239,7 +270,18 @@ router.post('/:id/leave', async (req, res) => {
     return res.status(400).json({ error: 'O mestre não pode sair da sala; apague a sala se quiser encerrá-la' });
   }
 
-  await prisma.roomMember.delete({ where: { id: membership.id } });
+  // As fichas do jogador ficam sem dono e a saída é registrada de uma vez
+  await prisma.$transaction([
+    prisma.character.updateMany({
+      where: { roomId: req.params.id, playerId: req.userId },
+      data: { playerId: null },
+    }),
+    prisma.roomMember.delete({ where: { id: membership.id } }),
+  ]);
+
+  // Tira todas as conexões do jogador do canal do chat da sala
+  req.app.get('io')?.in(canalUsuario(req.userId)).socketsLeave(canalSala(req.params.id));
+
   res.status(204).end();
 });
 
